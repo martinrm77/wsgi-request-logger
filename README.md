@@ -3,7 +3,7 @@
 This is a middleware which you can use to log requests to your WSGI based site.
 It's even imitating Apache's combined log format to allow you to use any of the
 many tools for Apache log file analysis.
-It also supplies an extended logging format with extra data fields that can be used by using the parameter extended=True to your ApacheFormatter()
+
 By making use of Python's standard library logging facilities, you can easily set it up to log to STDOUT, time rotated log files, email, syslog, etc.
 
 #### Installation
@@ -34,6 +34,10 @@ To add this middleware to your WSGI `application` and log to the file *access.lo
         from wsgiref.simple_server import make_server
         http = make_server('', 8080, loggingapp)
         http.serve_forever()
+
+It also supplies an extended logging format with extra data fields.
+
+To use this extended format, set the parameter extended=True to your ApacheFormatter().
 
 #### The Authors
 
