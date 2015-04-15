@@ -57,9 +57,11 @@ class WSGILogger(object):
     def standard_formatter(status_code, environ, content_length):
         return "{} {}".format(dt.now().isoformat(), status_code)
 
-def ApacheFormatter(with_response_time=True):
+def ApacheFormatter(with_response_time=True, extended=False):
     ''' A factory that returns the wanted formatter '''
-    if with_response_time:
+    if extended:
+        return ApacheFormatters.format_extended_log
+    elif with_response_time:
         return ApacheFormatters.format_with_response_time
     else:
         return ApacheFormatters.format_NCSA_log
@@ -106,6 +108,56 @@ class ApacheFormatters(object):
         """
         rt_ms = kw.get('rt_ms')
         return ApacheFormatters.format_NCSA_log(*args) + " {}/{}".format(int(rt_ms/1000000), rt_ms)
+
+    @staticmethod
+    def format_extended_log(status_code, environ, content_length, **kw):
+        """
+          Apache log format 'NCSA extended/combined log' with some additions:
+          "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-agent}i\""
+          see http://httpd.apache.org/docs/current/mod/mod_log_config.html#formats
+        """
+
+        # Let's collect log values
+        val = dict()
+        # Get value from X_FORWARDED_FOR header if it exists
+        if 'HTTP_X_FORWARDED_FOR' in environ:
+            val['host'] = environ.get('HTTP_X_FORWARDED_FOR').split(',')[-1].strip()
+        else:
+            val['host'] = environ.get('REMOTE_ADDR', '')
+        # Get url_scheme value from X_FORWARDED_PROTO if it exists
+        if 'HTTP_X_FORWARDED_PROTO' in environ:
+            val['url_scheme'] = environ.get('HTTP_X_FORWARDED_PROTO').split(',')[-1].strip()
+        else:
+            val['url_scheme'] = environ.get('wsgi.url_scheme', '')
+        # Get url_scheme value from X_FORWARDED_HOST if it exists
+        if 'HTTP_X_FORWARDED_HOST' in environ:
+            val['hostheader'] = environ.get('HTTP_X_FORWARDED_HOST').split(',')[-1].strip()
+        else:
+            val['hostheader'] = environ.get('HTTP_HOST', '')
+        val['logname'] = '-'
+        val['user'] = '-'
+        date = dt.now(tz=Local)
+        month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.month - 1]
+        val['time'] = date.strftime("%d/{0}/%Y:%H:%M:%S %z".format(month))
+        val['request'] = "{} {} {}".format(
+              environ.get('REQUEST_METHOD', ''),
+              environ.get('PATH_INFO', ''),
+              environ.get('SERVER_PROTOCOL', '')
+            )
+        val['status'] = status_code
+        val['size'] = content_length
+        val['referer'] = environ.get('HTTP_REFERER', '')
+        val['agent'] = environ.get('HTTP_USER_AGENT', '')
+        val['resp_time_ms'] = kw.get('rt_ms')
+        val['resp_time_sec'] = int(kw.get('rt_ms')/1000000)
+
+        # see http://docs.python.org/3/library/string.html#format-string-syntax
+        FORMAT = '{host} {logname} {user} [{time}] "{request}" '
+        FORMAT += '{status} {size} "{referer}" "{agent}" '
+        FORMAT += '{url_scheme} {hostheader} '
+        FORMAT += '{resp_time_sec}/{resp_time_ms}'
+        return FORMAT.format(**val)
+
 
 def log(handlers, formatter=ApacheFormatter(), **kw):
     '''Decorator for logging middleware.'''
