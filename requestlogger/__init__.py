@@ -31,6 +31,8 @@ class WSGILogger(object):
         self.formatter = formatter or WSGILogger.standard_formatter
         self.logger = logging.getLogger('requestlogger')
         self.logger.setLevel(logging.DEBUG)
+        # Dont propagate logs to root loggers, this might screw up your logging to get http requests twice or more
+        self.logger.propagate = False
         for handler in handlers:
             self.logger.addHandler(handler)
         self.application = application
